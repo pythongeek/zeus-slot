@@ -11,7 +11,7 @@ import {
   boolean,
   uniqueIndex,
   index,
-} from "drizzle-orm/postgres-core";
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
