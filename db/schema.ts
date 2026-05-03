@@ -1,25 +1,25 @@
 import {
-  mysqlTable,
-  mysqlEnum,
+  pgTable,
+  pgEnum,
   serial,
   varchar,
   text,
   timestamp,
   bigint,
-  decimal,
+  numeric,
   json,
   boolean,
   uniqueIndex,
   index,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/postgres-core";
 
-export const users = mysqlTable("users", {
+export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: pgEnum("role", ["user", "admin"]).default("user").notNull(),
   walletAddress: varchar("wallet_address", { length: 42 }).unique(),
   username: varchar("username", { length: 32 }).unique(),
   nonce: varchar("nonce", { length: 32 }).notNull().default(""),
@@ -35,14 +35,14 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export const balances = mysqlTable("balances", {
+export const balances = pgTable("balances", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
-  currency: mysqlEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
-  available: decimal("available", { precision: 24, scale: 8 }).default("0").notNull(),
-  locked: decimal("locked", { precision: 24, scale: 8 }).default("0").notNull(),
-  totalDeposited: decimal("total_deposited", { precision: 24, scale: 8 }).default("0").notNull(),
-  totalWithdrawn: decimal("total_withdrawn", { precision: 24, scale: 8 }).default("0").notNull(),
+  currency: pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
+  available: numeric("available", { precision: 24, scale: 8 }).default("0").notNull(),
+  locked: numeric("locked", { precision: 24, scale: 8 }).default("0").notNull(),
+  totalDeposited: numeric("total_deposited", { precision: 24, scale: 8 }).default("0").notNull(),
+  totalWithdrawn: numeric("total_withdrawn", { precision: 24, scale: 8 }).default("0").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("uk_user_currency").on(table.userId, table.currency),
@@ -50,19 +50,19 @@ export const balances = mysqlTable("balances", {
 
 export type Balance = typeof balances.$inferSelect;
 
-export const gameSessions = mysqlTable("game_sessions", {
+export const gameSessions = pgTable("game_sessions", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
   serverSeed: varchar("server_seed", { length: 64 }).notNull(),
   serverSeedHash: varchar("server_seed_hash", { length: 64 }).notNull(),
   clientSeed: varchar("client_seed", { length: 64 }).notNull(),
   nonce: bigint("nonce", { mode: "number", unsigned: true }).default(0).notNull(),
-  status: mysqlEnum("status", ["active", "completed", "expired"]).default("active").notNull(),
+  status: pgEnum("status", ["active", "completed", "expired"]).default("active").notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
   totalSpins: bigint("total_spins", { mode: "number", unsigned: true }).default(0).notNull(),
-  totalWagered: decimal("total_wagered", { precision: 24, scale: 8 }).default("0").notNull(),
-  totalWon: decimal("total_won", { precision: 24, scale: 8 }).default("0").notNull(),
+  totalWagered: numeric("total_wagered", { precision: 24, scale: 8 }).default("0").notNull(),
+  totalWon: numeric("total_won", { precision: 24, scale: 8 }).default("0").notNull(),
 }, (table) => [
   index("idx_user_active").on(table.userId, table.status),
   index("idx_seed_hash").on(table.serverSeedHash),
@@ -70,20 +70,20 @@ export const gameSessions = mysqlTable("game_sessions", {
 
 export type GameSession = typeof gameSessions.$inferSelect;
 
-export const spins = mysqlTable("spins", {
+export const spins = pgTable("spins", {
   id: serial("id").primaryKey(),
   sessionId: bigint("session_id", { mode: "number", unsigned: true }).notNull(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
   nonce: bigint("nonce", { mode: "number", unsigned: true }).notNull(),
-  betAmount: decimal("bet_amount", { precision: 24, scale: 8 }).notNull(),
-  currency: mysqlEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
+  betAmount: numeric("bet_amount", { precision: 24, scale: 8 }).notNull(),
+  currency: pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
   reelPositions: json("reel_positions").notNull(),
   symbolsShown: json("symbols_shown").notNull(),
-  winAmount: decimal("win_amount", { precision: 24, scale: 8 }).default("0").notNull(),
+  winAmount: numeric("win_amount", { precision: 24, scale: 8 }).default("0").notNull(),
   winLines: json("win_lines"),
   isBigWin: boolean("is_big_win").default(false).notNull(),
   isJackpot: boolean("is_jackpot").default(false).notNull(),
-  featureTriggered: mysqlEnum("feature_triggered", ["none", "free_spins", "thunder_strike"]).default("none").notNull(),
+  featureTriggered: pgEnum("feature_triggered", ["none", "free_spins", "thunder_strike"]).default("none").notNull(),
   freeSpinsAwarded: bigint("free_spins_awarded", { mode: "number", unsigned: true }).default(0).notNull(),
   hash: varchar("hash", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -95,14 +95,14 @@ export const spins = mysqlTable("spins", {
 
 export type Spin = typeof spins.$inferSelect;
 
-export const transactions = mysqlTable("transactions", {
+export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
-  type: mysqlEnum("type", ["deposit", "withdrawal"]).notNull(),
-  currency: mysqlEnum("currency", ["BTC", "ETH", "USDT"]).notNull(),
-  amount: decimal("amount", { precision: 24, scale: 8 }).notNull(),
-  fee: decimal("fee", { precision: 24, scale: 8 }).default("0").notNull(),
-  status: mysqlEnum("status", ["pending", "confirming", "confirmed", "failed", "cancelled"]).default("pending").notNull(),
+  type: pgEnum("type", ["deposit", "withdrawal"]).notNull(),
+  currency: pgEnum("currency", ["BTC", "ETH", "USDT"]).notNull(),
+  amount: numeric("amount", { precision: 24, scale: 8 }).notNull(),
+  fee: numeric("fee", { precision: 24, scale: 8 }).default("0").notNull(),
+  status: pgEnum("status", ["pending", "confirming", "confirmed", "failed", "cancelled"]).default("pending").notNull(),
   txHash: varchar("tx_hash", { length: 66 }),
   fromAddress: varchar("from_address", { length: 42 }),
   toAddress: varchar("to_address", { length: 42 }).notNull(),
@@ -118,12 +118,12 @@ export const transactions = mysqlTable("transactions", {
 
 export type Transaction = typeof transactions.$inferSelect;
 
-export const jackpotPool = mysqlTable("jackpot_pool", {
+export const jackpotPool = pgTable("jackpot_pool", {
   id: serial("id").primaryKey(),
-  tier: mysqlEnum("tier", ["mini", "major", "mega"]).notNull().unique(),
-  seedAmount: decimal("seed_amount", { precision: 24, scale: 8 }).notNull(),
-  currentAmount: decimal("current_amount", { precision: 24, scale: 8 }).notNull(),
-  contributionRate: decimal("contribution_rate", { precision: 6, scale: 6 }).notNull(),
+  tier: pgEnum("tier", ["mini", "major", "mega"]).notNull().unique(),
+  seedAmount: numeric("seed_amount", { precision: 24, scale: 8 }).notNull(),
+  currentAmount: numeric("current_amount", { precision: 24, scale: 8 }).notNull(),
+  contributionRate: numeric("contribution_rate", { precision: 6, scale: 6 }).notNull(),
   lastWonAt: timestamp("last_won_at"),
   lastWonBy: bigint("last_won_by", { mode: "number", unsigned: true }),
   hitCount: bigint("hit_count", { mode: "number", unsigned: true }).default(0).notNull(),
@@ -131,7 +131,7 @@ export const jackpotPool = mysqlTable("jackpot_pool", {
 
 export type JackpotPool = typeof jackpotPool.$inferSelect;
 
-export const auditLog = mysqlTable("audit_log", {
+export const auditLog = pgTable("audit_log", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }),
   action: varchar("action", { length: 50 }).notNull(),

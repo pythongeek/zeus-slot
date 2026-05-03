@@ -13,7 +13,7 @@ export const env = {
   appSecret: required("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  kimiAuthUrl: required("KIMI_AUTH_URL"),
-  kimiOpenUrl: required("KIMI_OPEN_URL"),
+  kimiAuthUrl: process.env.KIMI_AUTH_URL ?? "https://platform.moonshot.cn",
+  kimiOpenUrl: process.env.KIMI_OPEN_URL ?? "https://api.moonshot.cn",
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
 };
