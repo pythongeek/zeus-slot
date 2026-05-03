@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useGameStore } from "@/stores/gameStore";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 
 // Standalone mode — use local game engine instead of tRPC
 const IS_STANDALONE = import.meta.env.VITE_STANDALONE === "true";
@@ -104,9 +105,9 @@ export default function Game() {
   const autoSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // tRPC queries and mutations (used when connected to backend)
-  // tRPC queries and mutations (used when connected to backend)
   const _startSessionReal = trpc.game.startSession.useMutation();
   const _spinReal = trpc.game.spin.useMutation();
+  const _demoLogin = trpc.auth.demoLogin.useMutation();
 
   // Standalone hooks (local game engine — no backend needed)
   const _startSessionMock = useMockStartSession();
@@ -115,6 +116,9 @@ export default function Game() {
   // Use the right hook based on mode (both have same { mutateAsync } shape)
   const startSession = IS_STANDALONE ? _startSessionMock : _startSessionReal;
   const spin = IS_STANDALONE ? _spinMock : _spinReal;
+
+  // Auth check (used in non-standalone mode)
+  const { user } = useAuth();
 
   // Sync standalone store balance into game store
   const standaloneBalances = useStandaloneStore((s) => s.balances);
@@ -126,10 +130,23 @@ export default function Game() {
 
   // Initialize session on mount
   useEffect(() => {
-    if (!store.session) {
-      handleStartSession();
+    if (IS_STANDALONE || store.session) return;
+
+    // In non-standalone mode, auto-login as demo if not authenticated
+    if (!user) {
+      _demoLogin.mutate(undefined, {
+        onSuccess: () => {
+          // Invalidate auth cache so useAuth picks up the new user, then start session
+          trpc.useContext().auth.me.invalidate();
+          handleStartSession();
+        },
+        onError: (e) => console.error("Demo login failed:", e.message),
+      });
+      return;
     }
-  }, []);
+
+    handleStartSession();
+  }, [user]);
 
   const handleStartSession = async () => {
     try {
