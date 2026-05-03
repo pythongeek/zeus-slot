@@ -13,13 +13,26 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 
+// ── Enum types ──────────────────────────────────────────────────────────────
+
+const roleEnum = pgEnum("role", ["user", "admin"]);
+const currencyEnum4 = pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]);
+const currencyEnum3 = pgEnum("currency", ["BTC", "ETH", "USDT"]);
+const statusEnum = pgEnum("status", ["active", "completed", "expired"]);
+const featureTriggeredEnum = pgEnum("feature_triggered", ["none", "free_spins", "thunder_strike"]);
+const txTypeEnum = pgEnum("type", ["deposit", "withdrawal"]);
+const txStatusEnum = pgEnum("status", ["pending", "confirming", "confirmed", "failed", "cancelled"]);
+const jackpotTierEnum = pgEnum("tier", ["mini", "major", "mega"]);
+
+// ── Tables ─────────────────────────────────────────────────────────────────
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
-  role: pgEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: roleEnum("role").default("user").notNull(),
   walletAddress: varchar("wallet_address", { length: 42 }).unique(),
   username: varchar("username", { length: 32 }).unique(),
   nonce: varchar("nonce", { length: 32 }).notNull().default(""),
@@ -38,7 +51,7 @@ export type InsertUser = typeof users.$inferInsert;
 export const balances = pgTable("balances", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
-  currency: pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
+  currency: currencyEnum4("currency").notNull(),
   available: numeric("available", { precision: 24, scale: 8 }).default("0").notNull(),
   locked: numeric("locked", { precision: 24, scale: 8 }).default("0").notNull(),
   totalDeposited: numeric("total_deposited", { precision: 24, scale: 8 }).default("0").notNull(),
@@ -57,7 +70,7 @@ export const gameSessions = pgTable("game_sessions", {
   serverSeedHash: varchar("server_seed_hash", { length: 64 }).notNull(),
   clientSeed: varchar("client_seed", { length: 64 }).notNull(),
   nonce: bigint("nonce", { mode: "number", unsigned: true }).default(0).notNull(),
-  status: pgEnum("status", ["active", "completed", "expired"]).default("active").notNull(),
+  status: statusEnum("status").default("active").notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
   totalSpins: bigint("total_spins", { mode: "number", unsigned: true }).default(0).notNull(),
@@ -76,14 +89,14 @@ export const spins = pgTable("spins", {
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
   nonce: bigint("nonce", { mode: "number", unsigned: true }).notNull(),
   betAmount: numeric("bet_amount", { precision: 24, scale: 8 }).notNull(),
-  currency: pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]).notNull(),
+  currency: currencyEnum4("currency").notNull(),
   reelPositions: json("reel_positions").notNull(),
   symbolsShown: json("symbols_shown").notNull(),
   winAmount: numeric("win_amount", { precision: 24, scale: 8 }).default("0").notNull(),
   winLines: json("win_lines"),
   isBigWin: boolean("is_big_win").default(false).notNull(),
   isJackpot: boolean("is_jackpot").default(false).notNull(),
-  featureTriggered: pgEnum("feature_triggered", ["none", "free_spins", "thunder_strike"]).default("none").notNull(),
+  featureTriggered: featureTriggeredEnum("feature_triggered").default("none").notNull(),
   freeSpinsAwarded: bigint("free_spins_awarded", { mode: "number", unsigned: true }).default(0).notNull(),
   hash: varchar("hash", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -98,11 +111,11 @@ export type Spin = typeof spins.$inferSelect;
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
-  type: pgEnum("type", ["deposit", "withdrawal"]).notNull(),
-  currency: pgEnum("currency", ["BTC", "ETH", "USDT"]).notNull(),
+  type: txTypeEnum("type").notNull(),
+  currency: currencyEnum3("currency").notNull(),
   amount: numeric("amount", { precision: 24, scale: 8 }).notNull(),
   fee: numeric("fee", { precision: 24, scale: 8 }).default("0").notNull(),
-  status: pgEnum("status", ["pending", "confirming", "confirmed", "failed", "cancelled"]).default("pending").notNull(),
+  status: txStatusEnum("status").default("pending").notNull(),
   txHash: varchar("tx_hash", { length: 66 }),
   fromAddress: varchar("from_address", { length: 42 }),
   toAddress: varchar("to_address", { length: 42 }).notNull(),
@@ -120,7 +133,7 @@ export type Transaction = typeof transactions.$inferSelect;
 
 export const jackpotPool = pgTable("jackpot_pool", {
   id: serial("id").primaryKey(),
-  tier: pgEnum("tier", ["mini", "major", "mega"]).notNull().unique(),
+  tier: jackpotTierEnum("tier").notNull().unique(),
   seedAmount: numeric("seed_amount", { precision: 24, scale: 8 }).notNull(),
   currentAmount: numeric("current_amount", { precision: 24, scale: 8 }).notNull(),
   contributionRate: numeric("contribution_rate", { precision: 6, scale: 6 }).notNull(),
