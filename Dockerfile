@@ -3,7 +3,7 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm install --ignore-scripts
+RUN npm install
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -16,7 +16,7 @@ ENV NODE_ENV=production PORT=3000
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 
-RUN npm install --omit=dev --ignore-scripts --prefer-offline
+RUN npm install --omit=dev
 
 EXPOSE 3000
 
