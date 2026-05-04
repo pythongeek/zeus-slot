@@ -30,13 +30,15 @@ export async function upsertUser(data: InsertUser) {
   }
 
   try {
-    await getDb()
-      .insert(schema.users)
-      .values(values)
-      .onConflictDoUpdate({
-        target: schema.users.unionId,
-        set: updateSet,
-      });
+    const existing = await findUserByUnionId(values.unionId!);
+    if (existing) {
+      await getDb()
+        .update(schema.users)
+        .set(updateSet)
+        .where(eq(schema.users.unionId, values.unionId!));
+    } else {
+      await getDb().insert(schema.users).values(values);
+    }
   } catch (error: any) {
     console.error("UPSERT USER ERROR FULL:", error);
     if (error instanceof Error) {
