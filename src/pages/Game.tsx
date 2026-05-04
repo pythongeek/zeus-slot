@@ -3,6 +3,21 @@ import { useGameStore } from "@/stores/gameStore";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 
+// Sound & Animation
+import { soundManager } from "@/lib/soundManager";
+import {
+  gsap,
+  animateReelStop,
+  animateWinSymbols,
+  screenShake,
+  coinBurst,
+  particleBurst,
+  thunderFlash,
+  startConfetti,
+  pulseFrame,
+  gsapWinCounter,
+} from "@/lib/slotAnimations";
+
 // Standalone mode — use local game engine instead of tRPC
 const IS_STANDALONE = import.meta.env.VITE_STANDALONE === "true";
 import {
@@ -103,6 +118,11 @@ export default function Game() {
   const [winningPositions, setWinningPositions] = useState<Array<[number, number]>>([]);
   const [recentSpins, setRecentSpins] = useState<Array<{ id: number; winAmount: string; betAmount: string; currency: string; isWin: boolean; createdAt: Date }>>([]);
   const autoSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Animation cleanup refs
+  const winningSymbolCleanups = useRef<Array<() => void>>([]);
+  const confettiCleanup = useRef<(() => void) | null>(null);
+  // Reel DOM refs for GSAP bounce
+  const reelRefs = useRef<Array<HTMLElement | null>>([null, null, null, null, null]);
 
   // tRPC queries and mutations (used when connected to backend)
   const _startSessionReal = trpc.game.startSession.useMutation();
@@ -121,12 +141,17 @@ export default function Game() {
   const { user } = useAuth();
 
   // Sync standalone store balance into game store
-  const standaloneBalances = useStandaloneStore((s) => s.balances);
+  // Sync standalone store balance into game store
   useEffect(() => {
     if (IS_STANDALONE) {
       store.setBalances(standaloneBalances as any);
     }
   }, [standaloneBalances]);
+
+  // Sync audioEnabled to soundManager
+  useEffect(() => {
+    soundManager.setEnabled(store.audioEnabled);
+  }, [store.audioEnabled]);
 
   // Initialize session on mount
   useEffect(() => {
@@ -175,6 +200,7 @@ export default function Game() {
 
     // Start reel spin animation
     setSpinningReels([true, true, true, true, true]);
+    soundManager.playSpinStart();
 
     try {
       const result = await spin.mutateAsync({
@@ -208,6 +234,13 @@ export default function Game() {
               return next;
             });
           }
+
+          // GSAP bounce + reel stop sound
+          const reelEl = reelRefs.current[i];
+          if (reelEl) {
+            animateReelStop(reelEl);
+          }
+          soundManager.playReelStop(1.0 + i * 0.08); // ascending pitch per reel
 
           // Last reel stopped
           if (i === 4) {
@@ -262,32 +295,57 @@ export default function Game() {
       }
       setWinningPositions(allWinningPositions);
 
+      // GSAP win symbol bounce + glow
+      const winCells = document.querySelectorAll<HTMLElement>('.reel-cell-win');
+      if (winCells.length > 0) {
+        setTimeout(() => animateWinSymbols(Array.from(winCells)), 50);
+      }
+
       // Big win detection
       if (result.isJackpot) {
         setBigWinText(result.jackpotTier?.toUpperCase() + " JACKPOT!");
         setShowBigWin(true);
         store.setBigWinAmount(winAmount);
         store.setBigWinAnimation(true);
-        setLightningFlash(true);
-        setTimeout(() => setLightningFlash(false), 500);
+        // Thunder + confetti + shake + sound
+        thunderFlash();
+        confettiCleanup.current?.();
+        confettiCleanup.current = startConfetti();
+        screenShake(3);
+        soundManager.playJackpot();
+        // Gold frame pulse
+        pulseFrame();
+        setTimeout(() => setLightningFlash(true), 100);
+        setTimeout(() => setLightningFlash(false), 600);
       } else if (result.isBigWin) {
         setBigWinText("BIG WIN!");
         setShowBigWin(true);
         store.setBigWinAmount(winAmount);
         store.setBigWinAnimation(true);
+        screenShake(2);
+        confettiCleanup.current?.();
+        confettiCleanup.current = startConfetti();
+        soundManager.playBigWin();
+        pulseFrame();
         setLightningFlash(true);
         setTimeout(() => setLightningFlash(false), 500);
       } else {
+        // Regular win — coin drop + win sound + counter
+        soundManager.playWin();
+        _animateWinCounter(0, winAmount, 1200);
+        // Coin burst near win display
+        const winDisplay = document.querySelector<HTMLElement>('.win-display');
+        if (winDisplay) {
+          coinBurst(winDisplay, Math.min(Math.ceil(winAmount), 15));
+        }
         store.setGameState("winning");
       }
-
-      // Animate win counter
-      animateWinCounter(0, winAmount, 1000);
 
       // Free spins
       if (result.freeSpinsAwarded > 0) {
         store.setFreeSpinsRemaining(result.freeSpinsAwarded);
         store.setFreeSpinsTotal(result.freeSpinsAwarded);
+        soundManager.playFreeSpin();
       }
     } else {
       store.setGameState("idle");
@@ -309,7 +367,7 @@ export default function Game() {
     }
   };
 
-  const animateWinCounter = (start: number, end: number, duration: number) => {
+  const _animateWinCounter = (start: number, end: number, duration: number) => {
     const startTime = performance.now();
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
@@ -320,6 +378,9 @@ export default function Game() {
     };
     requestAnimationFrame(animate);
   };
+
+  // Trigger win counter when displayedWin changes via old RAF method (kept for displayedWin state)
+  const winDisplayRef = useRef<HTMLDivElement>(null);
 
   const closeBigWin = () => {
     setShowBigWin(false);
@@ -481,7 +542,11 @@ export default function Game() {
           <div className="bg-[#0A0A0F] rounded-lg p-2">
             <div className="grid grid-cols-5 gap-1">
               {reelSymbols.map((reel, reelIndex) => (
-                <div key={reelIndex} className="relative overflow-hidden bg-[#0D0D14] rounded-lg">
+                <div
+                  key={reelIndex}
+                  ref={el => { reelRefs.current[reelIndex] = el; }}
+                  className="relative overflow-hidden bg-[#0D0D14] rounded-lg"
+                >
                   {/* Reel symbols */}
                   <div className={`flex flex-col ${spinningReels[reelIndex] ? "animate-spin-reel" : ""}`}>
                     {reel.map((symbol, rowIndex) => {
@@ -491,7 +556,7 @@ export default function Game() {
                       return (
                         <div
                           key={rowIndex}
-                          className={`relative w-full aspect-square flex items-center justify-center p-1 transition-all duration-300 ${
+                          className={`reel-cell-win relative w-full aspect-square flex items-center justify-center p-1 transition-all duration-300 ${
                             isWinning ? "scale-105 z-10" : ""
                           }`}
                         >
@@ -531,7 +596,7 @@ export default function Game() {
 
         {/* Win Display */}
         {displayedWin > 0 && (
-          <div className="mt-4 text-center animate-bounce-in">
+          <div ref={winDisplayRef} className="win-display mt-4 text-center animate-bounce-in">
             <div className="text-[#00E676] font-mono text-2xl font-bold">
               +{CURRENCY_SYMBOLS[store.activeCurrency]}{displayedWin.toFixed(4)}
             </div>
@@ -628,7 +693,7 @@ export default function Game() {
 
               {/* Main Spin Button */}
               <button
-                onClick={handleSpin}
+                onClick={() => { soundManager.playButtonClick(); handleSpin(); }}
                 disabled={store.gameState === "spinning"}
                 className={`relative w-20 h-20 rounded-full transition-all duration-200 ${
                   store.gameState === "spinning"
@@ -696,44 +761,14 @@ export default function Game() {
         )}
       </div>
 
-      {/* Big Win Overlay */}
+      {/* Big Win Overlay — GSAP-powered */}
       {showBigWin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={closeBigWin}>
-          <div className="text-center animate-bounce-in">
-            <div className="text-6xl font-bold text-[#D4AF37] mb-4" style={{
-              fontFamily: "Cinzel, serif",
-              textShadow: "0 0 40px rgba(212,175,55,0.6), 0 0 80px rgba(212,175,55,0.3)"
-            }}>
-              {bigWinText}
-            </div>
-            <div className="text-4xl font-mono text-[#00E676] mb-2">
-              {CURRENCY_SYMBOLS[store.activeCurrency]}{displayedWin.toFixed(4)}
-            </div>
-            <div className="text-lg text-[#5E5E6E]">
-              ৳{(displayedWin * (BDT_RATES[store.activeCurrency] || 1)).toLocaleString("bn-BD")}
-            </div>
-            <Button
-              onClick={closeBigWin}
-              className="mt-6 bg-[#D4AF37] text-black hover:bg-[#F4D03F] font-semibold px-8"
-            >
-              Awesome!
-            </Button>
-          </div>
-          {/* Confetti-like particles */}
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-3 h-3 rounded-full animate-confetti"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `-10px`,
-                backgroundColor: ["#D4AF37", "#00E676", "#4FC3F7", "#F4D03F"][i % 4],
-                animationDelay: `${Math.random() * 2}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
-            />
-          ))}
-        </div>
+        <BigWinOverlay
+          bigWinText={bigWinText}
+          displayedWin={displayedWin}
+          currency={store.activeCurrency}
+          onClose={closeBigWin}
+        />
       )}
 
       {/* Paytable Dialog */}
@@ -934,6 +969,132 @@ for (let i = 0; i < 5; i++) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// GSAP-powered Big Win overlay component
+function BigWinOverlay({
+  bigWinText,
+  displayedWin,
+  currency,
+  onClose,
+}: {
+  bigWinText: string;
+  displayedWin: number;
+  currency: string;
+  onClose: () => void;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const amountRef = useRef<HTMLDivElement>(null);
+
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    BTC: "\u20BF",
+    ETH: "\u039E",
+    USDT: "USDT",
+    BDT: "\u09F3",
+  };
+  const BDT_RATES: Record<string, number> = {
+    BTC: 11000000,
+    ETH: 550000,
+    USDT: 110,
+    BDT: 1,
+  };
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline();
+
+      tl.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 });
+
+      tl.fromTo(
+        titleRef.current,
+        { scale: 0.3, opacity: 0, rotation: -10 },
+        { scale: 1, opacity: 1, rotation: 0, duration: 0.6, ease: 'elastic.out(1, 0.4)' },
+        "-=0.1"
+      );
+
+      tl.fromTo(
+        amountRef.current,
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.4, ease: 'back.out(1.7)' },
+        "-=0.2"
+      );
+
+      gsap.to(titleRef.current, {
+        scale: 1.05, duration: 0.5, ease: 'sine.inOut', yoyo: true, repeat: -1,
+      });
+
+      gsap.to(amountRef.current, {
+        textShadow: '0 0 30px rgba(0,230,118,0.9)', duration: 0.3, yoyo: true, repeat: -1, ease: 'sine.inOut',
+      });
+    });
+
+    return () => { /* ctx.revert() */ };
+  }, []);
+
+  useEffect(() => {
+    const colors = ['#D4AF37', '#00E676', '#4FC3F7', '#F4D03F', '#FF6B6B', '#ffffff'];
+    const particles: HTMLDivElement[] = [];
+
+    for (let i = 0; i < 50; i++) {
+      const p = document.createElement('div');
+      const size = 6 + Math.random() * 10;
+      p.style.cssText = `
+        position:fixed;width:${size}px;height:${size}px;
+        background:${colors[Math.floor(Math.random() * colors.length)]};
+        border-radius:${Math.random() > 0.5 ? '50%' : '2px'};
+        pointer-events:none;z-index:9997;left:${Math.random() * 100}vw;top:-20px;
+      `;
+      document.body.appendChild(p);
+      particles.push(p);
+
+      gsap.to(p, {
+        y: `${110 + Math.random() * 20}vh`,
+        x: `+=${(Math.random() - 0.5) * 300}`,
+        rotation: Math.random() * 720,
+        duration: 1.5 + Math.random() * 2,
+        delay: Math.random() * 1.5,
+        ease: 'none',
+        repeat: -1,
+        repeatDelay: Math.random() * 2,
+      });
+    }
+
+    return () => {
+      particles.forEach(p => { gsap.killTweensOf(p); p.remove(); });
+    };
+  }, []);
+
+  return (
+    <div ref={overlayRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="text-center">
+        <div
+          ref={titleRef}
+          className="text-6xl font-bold text-[#D4AF37] mb-4"
+          style={{ fontFamily: '"Cinzel", serif', textShadow: '0 0 60px rgba(212,175,55,0.8), 0 0 120px rgba(212,175,55,0.4)' }}
+        >
+          {bigWinText}
+        </div>
+        <div
+          ref={amountRef}
+          className="text-5xl font-mono font-bold text-[#00E676] mb-2"
+          style={{ textShadow: '0 0 20px rgba(0,230,118,0.6)' }}
+        >
+          {CURRENCY_SYMBOLS[currency]}{displayedWin.toFixed(4)}
+        </div>
+        <div className="text-lg text-[#9E9EAC]">
+          ৳{(displayedWin * (BDT_RATES[currency] || 1)).toLocaleString('bn-BD')}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-8 bg-[#D4AF37] text-black hover:bg-[#F4D03F] font-bold px-10 py-3 rounded-full text-lg transition-all hover:scale-105 active:scale-95"
+          style={{ boxShadow: '0 0 30px rgba(212,175,55,0.5)' }}
+        >
+          Awesome!
+        </button>
+      </div>
     </div>
   );
 }
