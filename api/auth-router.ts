@@ -4,8 +4,11 @@ import { Session } from "@contracts/constants";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { signSessionToken } from "./kimi/session";
-import { upsertUser } from "./queries/users";
+import { upsertUser, findUserByUnionId } from "./queries/users";
 import { env } from "./lib/env";
+import { getDb } from "./queries/connection";
+import { balances } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 const DEMO_USER = {
   unionId: "demo-user-001",
@@ -21,12 +24,27 @@ export const authRouter = createRouter({
       throw new Error("Demo login is only available in demo mode.");
     }
     try {
+      const db = getDb();
       await upsertUser({
         unionId: DEMO_USER.unionId,
         name: DEMO_USER.name,
         avatar: DEMO_USER.avatar,
         lastSignInAt: new Date(),
       });
+      const fullUser = await findUserByUnionId(DEMO_USER.unionId);
+      if (fullUser) {
+        const currencies = ["BTC", "ETH", "USDT", "BDT"] as const;
+        for (const currency of currencies) {
+          await db.insert(balances).values({
+            userId: fullUser.id,
+            currency,
+            available: "1000",
+            locked: "0",
+            totalDeposited: "0",
+            totalWithdrawn: "0",
+          }).onConflictDoNothing();
+        }
+      }
     } catch (e: any) {
       const dbErr = `DB Error: ${e.message} | Code: ${e.code} | Detail: ${e.detail} | Hint: ${e.hint} | Table: ${e.table_name} | Column: ${e.column_name}`;
       throw new Error(dbErr);
