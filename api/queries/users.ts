@@ -29,11 +29,20 @@ export async function upsertUser(data: InsertUser) {
     updateSet.role = "admin";
   }
 
-  await getDb()
-    .insert(schema.users)
-    .values(values)
-    .onConflictDoUpdate({
-      target: schema.users.unionId,
-      set: updateSet,
-    });
+  try {
+    await getDb()
+      .insert(schema.users)
+      .values(values)
+      .onConflictDoUpdate({
+        target: schema.users.unionId,
+        set: updateSet,
+      });
+  } catch (error: any) {
+    console.error("UPSERT USER ERROR FULL:", error);
+    if (error instanceof Error) {
+      console.error("UPSERT USER ERROR MESSAGE:", error.message);
+      console.error("UPSERT USER ERROR CAUSE:", error.cause);
+    }
+    throw error;
+  }
 }

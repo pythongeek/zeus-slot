@@ -20,12 +20,17 @@ export const authRouter = createRouter({
     if (env.appId !== "demo") {
       throw new Error("Demo login is only available in demo mode.");
     }
-    await upsertUser({
-      unionId: DEMO_USER.unionId,
-      name: DEMO_USER.name,
-      avatar: DEMO_USER.avatar,
-      lastSignInAt: new Date(),
-    });
+    try {
+      await upsertUser({
+        unionId: DEMO_USER.unionId,
+        name: DEMO_USER.name,
+        avatar: DEMO_USER.avatar,
+        lastSignInAt: new Date(),
+      });
+    } catch (e: any) {
+      const dbErr = `DB Error: ${e.message} | Code: ${e.code} | Detail: ${e.detail} | Hint: ${e.hint} | Table: ${e.table_name} | Column: ${e.column_name}`;
+      throw new Error(dbErr);
+    }
     const token = await signSessionToken({
       unionId: DEMO_USER.unionId,
       clientId: env.appId,
