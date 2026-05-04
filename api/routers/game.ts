@@ -212,11 +212,9 @@ export const gameRouter = createRouter({
         clientSeed,
         nonce: 0,
         status: "active",
-      }).$returningId();
+      }).returning();
 
-      const fullSession = await db.select().from(gameSessions)
-        .where(eq(gameSessions.id, session.id))
-        .then(rows => rows[0]);
+      const fullSession = session;
 
       return {
         sessionId: fullSession.id,
@@ -353,7 +351,7 @@ export const gameRouter = createRouter({
         featureTriggered,
         freeSpinsAwarded,
         hash,
-      }).$returningId();
+      }).returning();
 
       // Update session
       await db.update(gameSessions)

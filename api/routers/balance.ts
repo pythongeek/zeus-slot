@@ -65,7 +65,7 @@ export const balanceRouter = createRouter({
         amount: String(amount),
         toAddress: address,
         status: "pending",
-      }).$returningId();
+      }).returning();
 
       return {
         txId: tx.id,
@@ -166,7 +166,7 @@ export const balanceRouter = createRouter({
         fee: String(fee),
         toAddress: input.toAddress,
         status: "pending",
-      }).$returningId();
+      }).returning();
 
       return {
         txId: tx.id,

@@ -16,8 +16,7 @@ import {
 // ── Enum types ──────────────────────────────────────────────────────────────
 
 const roleEnum = pgEnum("role", ["user", "admin"]);
-const currencyEnum4 = pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]);
-const currencyEnum3 = pgEnum("currency", ["BTC", "ETH", "USDT"]);
+const currencyEnum = pgEnum("currency", ["BTC", "ETH", "USDT", "BDT"]);
 const statusEnum = pgEnum("status", ["active", "completed", "expired"]);
 const featureTriggeredEnum = pgEnum("feature_triggered", ["none", "free_spins", "thunder_strike"]);
 const txTypeEnum = pgEnum("type", ["deposit", "withdrawal"]);
@@ -51,7 +50,7 @@ export type InsertUser = typeof users.$inferInsert;
 export const balances = pgTable("balances", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
-  currency: currencyEnum4("currency").notNull(),
+  currency: currencyEnum("currency").notNull(),
   available: numeric("available", { precision: 24, scale: 8 }).default("0").notNull(),
   locked: numeric("locked", { precision: 24, scale: 8 }).default("0").notNull(),
   totalDeposited: numeric("total_deposited", { precision: 24, scale: 8 }).default("0").notNull(),
@@ -89,7 +88,7 @@ export const spins = pgTable("spins", {
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
   nonce: bigint("nonce", { mode: "number", unsigned: true }).notNull(),
   betAmount: numeric("bet_amount", { precision: 24, scale: 8 }).notNull(),
-  currency: currencyEnum4("currency").notNull(),
+  currency: currencyEnum("currency").notNull(),
   reelPositions: json("reel_positions").notNull(),
   symbolsShown: json("symbols_shown").notNull(),
   winAmount: numeric("win_amount", { precision: 24, scale: 8 }).default("0").notNull(),
@@ -112,7 +111,7 @@ export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
   type: txTypeEnum("type").notNull(),
-  currency: currencyEnum3("currency").notNull(),
+  currency: currencyEnum("currency").notNull(),
   amount: numeric("amount", { precision: 24, scale: 8 }).notNull(),
   fee: numeric("fee", { precision: 24, scale: 8 }).default("0").notNull(),
   status: txStatusEnum("status").default("pending").notNull(),
