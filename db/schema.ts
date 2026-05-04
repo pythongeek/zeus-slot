@@ -28,7 +28,7 @@ const jackpotTierEnum = pgEnum("tier", ["mini", "major", "mega"]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  unionId: varchar("unionId", { length: 255 }).notNull().unique(),
+  unionId: varchar("union_id", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
@@ -37,12 +37,12 @@ export const users = pgTable("users", {
   username: varchar("username", { length: 32 }).unique(),
   nonce: varchar("nonce", { length: 32 }).notNull().default(""),
   isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt")
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
     .defaultNow()
     .notNull()
     .$onUpdate(() => new Date()),
-  lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
+  lastSignInAt: timestamp("last_sign_in_at").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
